@@ -1,0 +1,155 @@
+adsb-automatic dependent surveillance broadcast: aeronava isi determina pozitia prin intermediul GPS si o difuzeaza periodic, permitand sa fie urmarita in timp real.
+-flight/tail nr,pozitie, altitudine,viteza, directie;
+-inlocuieste radarul traditional la sol
+-datele difuzate public prin unde radio. Oricine le poate receptiona prin unde radio
+-in=primire de info despre vreme, date si out de la alte aeronave din apropiere
+-out=difuzare de date catre sol si alte aeronave.
+-signal e receptionat de statii de la sol (ATC, Flight Tracking Networks, Aviation Hobbyists), puncte de rx strategic amplasate; daca nu e line of sight deloc cu niciun receiver de la sol-> Space-Based
+-1090MHz
+-ppm modulatie
+-Manchester encoding
+-Preamble-Preambul de 8us ce consta in 4 impulsuri specifice
+-112 biti in total: 
+1. 5 biti ce spun receiver ului ce fel de mesaj s a transmis
+2. 24 biti- ICAO address;
+3. 56 biti-Payload-datele efective. Depinzand de tipul mesajului, poate contine lat/long precise, inaltime, ground speed, heading;
+4. 24 biti de paritate-cod detector de erori ce se asigura ca receiver ul nu primeste date corupte din cauza interferentelor.:CRC-cyclic redundancy check-permite si corectarea unui anumit numar de biti corupti:forward err correction
+-este transmis in pachete; foloseste canal cu acces multiplu nesincronizat->semnalul se transmite fara detective de purtatoare
+  
+
+
+Aircraft-to-Satellite Communication
+-A fost lansata constelatia Iridium NEXT pe LEO ~=35k km; 66 sateliti cross linked;
+-Aireon a instalat cate un receptor ADSB pe fiecare dintre cei 66 sateliti IRIDIUM NEXT
+-cand avionul este deasupra marii si semnalul este receptionat de catre un satelit, acesta transmite semnalul din satelit in satelit pana ajunge la unul care se afla deasupra unei statii terestre de la sol
+
+Explicatii Cod
+sc = satelliteScenario(startTime,stopTime,sampleTime);-scenariul/mediul de simulare
+                                                      -satellitScenario pregateste model matematic si fizic al Pamantului si al spatiului din jurul sau
+
+viewer = satelliteScenarioViewer(sc);-lanseaza GUI ul
+
+trajectory = geoTrajectory(waypoints,seconds(timeOfArrival),AutoPitch=true,AutoBank=true); -defineste ruta exacta de zbor
+
+AutoPitch-tangaj automat
+AutoBank-ruliu automat
+
+geoplot(LLA(:,1), LLA(:,2), "b-") -extrage randurile din prima coloana-latitudine
+                                  -extrage din a doua coloana-longitudine
+geolimits([31,42],[-76,-63]);
+geobasemap topographic; -vizualizarea traiectoriei aeronavei
+
+
+numSatellitesPerOrbitalPlane = 11;
+numOrbits = 6;6 orbite, cate 11 sateliti pe orbita
+
+orbitIdx = repelem(1:numOrbits,1,numSatellitesPerOrbitalPlane);
+planeIdx = repmat(1:numSatellitesPerOrbitalPlane,1,numOrbits);
+
+RAAN = 180*(orbitIdx-1)/numOrbits;-longitudinea nodului ascendent
+                                  -defineste orientarea longitudinala a satelitului in planul orbital
+                                  -spatiere de 30 de grade intre orbite
+                                  -inmultesc cu 180 pentru ca o singura orbita acopera ambele emisfere
+                                 
+
+trueanomaly = 360*(planeIdx-1 + 0.5*(mod(orbitIdx,2)-1))/numSatellitesPerOrbitalPlane;
+semimajoraxis = repmat((6371 + 780)*1e3,size(RAAN)); % meters
+-calcul pozitie satelit pe orbita
+-imparte cele 360 grade(orbita) la nr de sateliti si obtinem 32.7 grade distanta intre sateliti
+-se face un decalaj intre orbitele pare si impare.
+-daca este para, rezultat -0.5-> muta satelitii mai in spate cu jumatate de pas-> acoperire totala a suprafetei, fara zone oarbe daca ar zbura paraleli
+-daca este impara, rezultat 0, lasa satelitii la locul lor
+-altitudinea de zbor(semiaxa mare): 6371 m raza pamant, 780 altitudinea satelitiilor in km->raza orbitala
+-se masoara de la centrul pamantului
+-rezultat in metri
+
+inclination = repmat(86.4,size(RAAN)); % degrees - inclinatie de 86.4 grade fata de ecuator
+eccentricity = zeros(size(RAAN)); % degrees-excentricitate=0->cerc perfect
+argofperiapsis = zeros(size(RAAN)); % degrees -perigeul=0->fiind cerc perfect, nu exista perigeu, dar e nevoie de o valoare functiile satellite
+
+iridiumSatellites = satellite(sc,...
+    semimajoraxis,eccentricity,inclination,RAAN,argofperiapsis,trueanomaly,...
+    Name="Iridium " + string(1:66)');-introducerea satelitilor in simulare
+
+
+hide(iridiumSatellites.Orbit,viewer);
+show(iridiumSatellites(1:numSatellitesPerOrbitalPlane:end).Orbit,viewer);-fiind mai multi sateliti pe aceeasi orbita,se afiseaza aceasta doar pentru un satelit
+
+acAirport = access(aircraft,sc.GroundStations);
+airportAccessIntvls = accessIntervals(acAirport);-line of sight direct de la aeroport primele 2 ore si ultimele 2 ore
+
+acSatellite = access(aircraft,iridiumConicalSensors);
+satelliteAccessIntvls = accessIntervals(acSatellite); -restul timpului are conexiune cu satelitii
+
+[sSatellite,time] = accessStatus(acSatellite); 
+satVisPlotData = double(sSatellite);
+satVisPlotData(satVisPlotData == false) = NaN; % Hide invisible satellites.
+satVisPlotData = satVisPlotData + (0:numel(iridiumSatellites)-1)'; % Add space to satellites to be stacked.
+-plots the satellite visibility
+
+plot(time,satVisPlotData," .",Color="blue")
+yticks(1:5:66)
+yticklabels(iridiumSatellites.Name(1:5:66))
+title("Satellite Visibility")
+grid on
+xlabel("Time")
+axis tight
+
+
+airportADSBAntenna = arrayConfig("Size",[1 1]); % Create an isotropic antenna element
+airportADSBReceiver = receiver(...
+    airports, ...
+    Antenna=airportADSBAntenna, ...    
+    Name=airports.Name + " Receiver");
+pattern(airportADSBReceiver,fADSB,Size=1000);
+-creaza antena izotrop si o amplaseaza atat pe avion pt tx cat si in aeroporturi pt rx
+
+if antennaType == "Isotropic"
+    % Create and add an isotropic antenna receiver to the Iridium satellites.
+    satelliteADSBAntenna = arrayConfig("Size",[1 1]); % Add code comment    
+    satelliteADSBReceiver = receiver(iridiumSatellites, ...
+        Antenna=satelliteADSBAntenna, ...
+        MountingAngles=[0,0,0], ... -aliniaza antena cu coord satelitului.
+        Name=iridiumSatellites.Name + " Receiver");-ataseaza receiver ul pe fiecare satelit in parte
+    pattern(satelliteADSBReceiver,fADSB,Size=50000);    -viualizare antena
+
+    % Play the scenario.
+    play(sc);
+end
+
+if antennaType == "Custom 48-Beam"
+    % Use Custom Antenna Element on 48-spot beam    
+    satelliteADSBAntenna = HelperCustom48BeamAntenna(fADSB);
+    satelliteADSBReceiver = receiver(iridiumSatellites, ...
+        Antenna=satelliteADSBAntenna, ...
+        MountingAngles=[0,-90,0], ... -seteaza tangajul la -90, direct in jos(y-axis)
+        Name=iridiumSatellites.Name + " Receiver");
+    pattern(satelliteADSBReceiver,fADSB,Size=200000);    
+
+tangaj/pitch-sus jos
+ruliu/roll-inclinare laterala
+giratie/yaw-rotire spre stanga/dreapta
+
+    % Play the scenario.
+    play(sc);
+end
+lnkADSB = link(aircraftADSBTransmitter, [airportADSBReceiver, satelliteADSBReceiver]);-stabileste traseul de comunicatie pe care simularea trebuie sa l analizeze. Se urmareste semnalul ce pleaca de la transmitator la grupul de receptoare.
+
+[eL,time] = ebno(lnkADSB);-masoara calitatea bruta a semnalului primit pentru legatura definita mai sus
+marginADSB = eL - repmat([airportADSBReceiver.RequiredEbNo,satelliteADSBReceiver.RequiredEbNo]',[1,size(eL,2)]);
+-este marja de semnal:diferenta dintre semnalul primit si semnalul minim necesar pentru decodarea corecta a datelor
+-repmat-intinde valorile pragurilor minime(req) de la aeroport si satelit pe toata durata simularii
+figure;
+plot(time,max(marginADSB),"b")-se extrage cea mai mare valoare a marjei
+axis tight
+grid on
+xlabel("Time");
+ylabel("Margin (dB)");
+title("ADS-B Out Link Margin vs. Time");
+
+Idei de pus in plus:
+-Route:Wellington-Sydney;
+-de adaugat inca un avion;
+-interferenta 5G;
+-doppler effect;
+-de completat;

@@ -1,0 +1,1 @@
+openExample('satcom_antenna_phased/AircraftADSBOutAirportAndSatelliteConnectivityExample')
