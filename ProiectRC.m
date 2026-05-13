@@ -225,10 +225,7 @@ if antennaType == "Isotropic"
         Antenna=satelliteADSBAntenna, ...
         MountingAngles=[0,0,0], ...
         Name=iridiumSatellites.Name + " Receiver");
-    pattern(satelliteADSBReceiver,fADSB,Size=50000);    
-
-    % Play the scenario.
-    play(sc);
+    pattern(satelliteADSBReceiver,fADSB,Size=50000);
 end
 %% 
 % 
@@ -246,10 +243,7 @@ if antennaType == "Custom 48-Beam"
         Antenna=satelliteADSBAntenna, ...
         MountingAngles=[0,-90,0], ...
         Name=iridiumSatellites.Name + " Receiver");
-    pattern(satelliteADSBReceiver,fADSB,Size=200000);    
-
-    % Play the scenario.
-    play(sc);
+    pattern(satelliteADSBReceiver,fADSB,Size=200000);
 end
 %% 
 % 
@@ -270,6 +264,9 @@ grid on
 xlabel("Time");
 ylabel("Margin (dB)");
 title("ADS-B Out Link Margin vs. Time");
+
+% Simulare principala - o singura lansare
+play(sc);
 %% Aircraft Chase View
 % Optionally, create a second viewer to follow or chase the aircraft and visualize 
 % the access and links relative to the aircraft body. The mouse can then be used 
