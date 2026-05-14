@@ -299,7 +299,7 @@ function Gui()
     end
 
     function cbOpenDoc()
-        docPath = fullfile(fileparts(mfilename('fullpath')), 'Proiect RC.docx');
+        docPath = fullfile(fileparts(mfilename('fullpath')), 'Proiect_RC.docx');
         if ~isfile(docPath)
             errordlg(['Fișierul nu a fost găsit:' newline docPath], ...
                 'Eroare documentație');
